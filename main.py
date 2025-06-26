@@ -44,10 +44,8 @@ def get_coin_price(symbol):
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()
-        return None
     except Exception as e:
         print("ERROR:", e)
-        return None
 
 
 def get_top_10():
@@ -56,10 +54,8 @@ def get_top_10():
         response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()[:10]
-        return None
     except Exception as e:
         print("ERROR:", e)
-        return None
 
 # --- Actions ---
 if top_button:

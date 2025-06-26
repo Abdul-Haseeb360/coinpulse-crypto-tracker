@@ -38,32 +38,32 @@ with col2:
     live_button = st.button("💰 Get Live Price")
 
 # --- Helper Functions ---
+headers = {"User-Agent": "Mozilla/5.0"}
+
 def get_coin_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
     try:
-        response = requests.get(url, timeout=10)
-        print(f"Status: {response.status_code} | URL: {url}")
-        print("Response:", response.text)
+        response = requests.get(url, headers=headers, timeout=10)
+        st.text(f"Debug: {response.status_code}")
         if response.status_code == 200:
             return response.json()
         return None
     except Exception as e:
-        print("❌ ERROR:", e)
+        st.text(f"Error: {e}")
         return None
-
 
 def get_top_10():
     url = "https://api.binance.com/api/v3/ticker/price"
     try:
-        response = requests.get(url, timeout=10)
-        print(f"TOP10 Status: {response.status_code}")
-        print("TOP10 Response:", response.text[:200])  # just preview
+        response = requests.get(url, headers=headers, timeout=10)
+        st.text(f"Top Debug: {response.status_code}")
         if response.status_code == 200:
             return response.json()[:10]
         return None
     except Exception as e:
-        print("❌ TOP10 ERROR:", e)
+        st.text(f"Top Error: {e}")
         return None
+
 
 # --- Actions ---
 if top_button:

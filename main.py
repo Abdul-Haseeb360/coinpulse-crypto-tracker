@@ -41,21 +41,24 @@ with col2:
 def get_coin_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()
         return None
-    except Exception:
+    except Exception as e:
+        print("ERROR:", e)
         return None
+
 
 def get_top_10():
     url = "https://api.binance.com/api/v3/ticker/price"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             return response.json()[:10]
         return None
-    except Exception:
+    except Exception as e:
+        print("ERROR:", e)
         return None
 
 # --- Actions ---

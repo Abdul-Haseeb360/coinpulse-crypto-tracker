@@ -1,96 +1,56 @@
-import streamlit as st
+import chainlit as cl
 import requests
 
-# --- Page Config ---
-st.set_page_config(page_title="📈 CoinPulse - Live Crypto Tracker", page_icon="", layout="centered")
+# Headers to avoid 451 error (if testing locally)
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-# --- Styling ---
-st.markdown("""
-    <style>
-        .main-title {
-            font-size: 32px;
-            font-weight: bold;
-            color: #3F51B5;
-        }
-        .subtext {
-            font-size: 16px;
-            color: #555;
-        }
-        .btn-row {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 20px;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-
-st.title("💹 CoinPulse Live Crypto Agent")
-st.markdown("Type a coin symbol like `BTCUSDT` or click below to get **Top 10 coin prices**.")
-
-# --- User Inputs ---
-user_input = st.text_input("🔎 Enter a Coin Symbol (e.g., BTCUSDT)", "")
-
-col1, col2 = st.columns(2)
-with col1:
-    top_button = st.button("🔟 Get Top 10 Coins")
-with col2: 
-    live_button = st.button("💰 Get Live Price")
-
-# --- Helper Functions ---
-headers = {"User-Agent": "Mozilla/5.0"}
-
+# Function to get price for a specific symbol
 def get_coin_price(symbol):
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        st.text(f"Debug: {response.status_code}")
-        if response.status_code == 200:
-            return response.json()
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        if res.status_code == 200:
+            return res.json()
         return None
     except Exception as e:
-        st.text(f"Error: {e}")
-        return None
+        return {"error": str(e)}
 
+# Function to get top 10 coins
 def get_top_10():
     url = "https://api.binance.com/api/v3/ticker/price"
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        st.text(f"Top Debug: {response.status_code}")
-        if response.status_code == 200:
-            return response.json()[:10]
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        if res.status_code == 200:
+            return res.json()[:10]
         return None
     except Exception as e:
-        st.text(f"Top Error: {e}")
-        return None
+        return {"error": str(e)}
 
+# Start message
+@cl.on_chat_start
+async def on_chat_start():
+    await cl.Message(content="💹 **Welcome to CoinPulse AI Crypto Agent!**\n\nType a symbol like `BTCUSDT` to get the live price, or type `TOP 10` to see the top coins.").send()
 
-# --- Actions ---
-if top_button:
-    st.subheader("🔝 Top 10 Coins")
-    data = get_top_10()
-    if data:
-        for item in data:
-            st.write(f"**{item['symbol']}**: {item['price']} USDT")
-    else:
-        st.error("❌ Could not fetch top coins. Check your connection.")
+# On message from user
+@cl.on_message
+async def on_message(message: cl.Message):
+    user_input = message.content.strip().upper()
 
-if live_button:
-    symbol = user_input.strip().upper()
-    if not symbol:
-        st.warning("⚠️ Please enter a coin symbol before clicking Get Live Price.")
-    else:
-        st.subheader(f"📈 Live Price for `{symbol}`")
-        data = get_coin_price(symbol)
-        if data:
-             st.success(f" **{symbol}**: {data['price']} USDT")
+    if user_input == "TOP 10":
+        coins = get_top_10()
+        if coins and isinstance(coins, list):
+            text = "🔟 **Top 10 Coins by Symbol**\n"
+            for coin in coins:
+                text += f"• **{coin['symbol']}** = `{coin['price']} USDT`\n"
+            await cl.Message(content=text).send()
         else:
-            st.error("⚠️ Invalid symbol or problem with Binance API.")
-            
+            await cl.Message(content="❌ Failed to fetch top 10 coins.").send()
 
-
-
-st.markdown("---")
-st.markdown(" 📈 **CoinPulse – Live Crypto Tracker AI** &copy; 2025 | Built with ❤️ using Streamlit")
-st.markdown(
-    "📧 Contact: `abdulhaseebshaikh1234@gmail.com` | 🔗 [GitHub](https://github.com/Abdul-Haseeb360)")
+    elif user_input:
+        coin = get_coin_price(user_input)
+        if coin and "price" in coin:
+            await cl.Message(content=f"💰 **{user_input}** price: `{coin['price']} USDT`").send()
+        else:
+            await cl.Message(content=f"⚠️ Symbol `{user_input}` not found or API failed. Try symbols like `BTCUSDT`, `ETHUSDT`.").send()
+    else:
+        await cl.Message(content="⚠️ Please enter a valid coin symbol.").send()

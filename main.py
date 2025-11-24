@@ -1,12 +1,20 @@
 import chainlit as cl
 import requests
+import re
 
-# Headers to avoid 451 error (if testing locally)
+# -----------------------------------------
+# 🔧 Global Config
+# -----------------------------------------
 HEADERS = {"User-Agent": "Mozilla/5.0"}
+BINANCE_PRICE_URL = "https://api.binance.com/api/v3/ticker/price"
+BINANCE_24H_URL = "https://api.binance.com/api/v3/ticker/24hr"
 
-# Function to get price for a specific symbol
+
+# -----------------------------------------
+# 🔹 Get price of a specific coin
+# -----------------------------------------
 def get_coin_price(symbol):
-    url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
+    url = f"{BINANCE_PRICE_URL}?symbol={symbol}"
     try:
         res = requests.get(url, headers=HEADERS, timeout=10)
         if res.status_code == 200:
@@ -15,28 +23,107 @@ def get_coin_price(symbol):
     except Exception as e:
         return {"error": str(e)}
 
-# Function to get top 10 coins
+
+# -----------------------------------------
+# 🔹 Get top 10 coins (basic)
+# -----------------------------------------
 def get_top_10():
-    url = "https://api.binance.com/api/v3/ticker/price"
     try:
-        res = requests.get(url, headers=HEADERS, timeout=10)
+        res = requests.get(BINANCE_PRICE_URL, headers=HEADERS, timeout=10)
         if res.status_code == 200:
             return res.json()[:10]
         return None
     except Exception as e:
         return {"error": str(e)}
 
-# Start message
+
+# -----------------------------------------
+# 🔥 NEW: Get Top Gainers (Top 10 by % change)
+# -----------------------------------------
+def get_top_gainers():
+    try:
+        res = requests.get(BINANCE_24H_URL, headers=HEADERS, timeout=10)
+        if res.status_code != 200:
+            return None
+
+        data = res.json()
+
+        # Sort by priceChangePercent DESC
+        sorted_coins = sorted(
+            data,
+            key=lambda x: float(x["priceChangePercent"]),
+            reverse=True
+        )
+
+        return sorted_coins[:10]
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
+
+def extract_number(text):
+    """Extracts the first number from a user message."""
+    match = re.search(r'\b\d+\b', text)
+    return int(match.group()) if match else None
+
+
+# -----------------------------------------
+# 🚀 Chat Start Message
+# -----------------------------------------
 @cl.on_chat_start
 async def on_chat_start():
-    await cl.Message(content="💹 **Welcome to CoinPulse AI Crypto Agent!**\n\nType a symbol like `BTCUSDT` to get the live price, or type `TOP 10` to see the top coins.").send()
+    await cl.Message(
+        content=(
+            "💹 **Welcome to CoinPulse AI Crypto Agent!**\n\n"
+            # "You can ask:\n"
+            # "• `BTCUSDT` → Get live price\n"
+            # "• `TOP 10` → Top 10 coins\n"
+            # "• `GAINERS` → 🔥 Top 10 gaining coins\n"
+        )
+    ).send()
 
-# On message from user
+
+# -----------------------------------------
+# 💬 Message Handler
+# -----------------------------------------
+@cl.on_message
 @cl.on_message
 async def on_message(message: cl.Message):
-    user_input = message.content.strip().upper()
+    user_text = message.content.strip()
+    user_upper = user_text.upper()
 
-    if user_input == "TOP 10":
+    # ---------------------------------
+    # Detect numbers for dynamic count
+    # ---------------------------------
+    count = extract_number(user_text) or 10  # default = 10
+
+    # ---------------------------------
+    # Natural Language: Gainers
+    # ---------------------------------
+    if "GAINER" in user_upper or "TOP" in user_upper and "GAIN" in user_upper:
+        gainers = get_top_gainers()
+
+        if gainers and isinstance(gainers, list):
+            gainers = gainers[:count]
+
+            text = f"📈 **Top {count} Gainers (24h)**\n\n"
+            for coin in gainers:
+                text += (
+                    f"• **{coin['symbol']}** — "
+                    f"Change: `{coin['priceChangePercent']}%`\n"
+                )
+
+            await cl.Message(content=text).send()
+        else:
+            await cl.Message(content="❌ Failed to fetch top gainers.").send()
+        return
+
+    # ---------------------------------
+    # Hard command: TOP 10
+    # ---------------------------------
+    if user_upper == "TOP 10":
         coins = get_top_10()
         if coins and isinstance(coins, list):
             text = "🔟 **Top 10 Coins by Symbol**\n"
@@ -45,12 +132,21 @@ async def on_message(message: cl.Message):
             await cl.Message(content=text).send()
         else:
             await cl.Message(content="❌ Failed to fetch top 10 coins.").send()
+        return
 
-    elif user_input:
-        coin = get_coin_price(user_input)
-        if coin and "price" in coin:
-            await cl.Message(content=f"💰 **{user_input}** price: `{coin['price']} USDT`").send()
-        else:
-            await cl.Message(content=f"⚠️ Symbol `{user_input}` not found or API failed. Try symbols like `BTCUSDT`, `ETHUSDT`.").send()
-    else:
-        await cl.Message(content="⚠️ Please enter a valid coin symbol.").send()
+    # ---------------------------------
+    # Specific Coin Price
+    # ---------------------------------
+    coin = get_coin_price(user_upper)
+    if coin and "price" in coin:
+        await cl.Message(
+            content=f"💰 **{user_upper}** price: `{coin['price']} USDT`"
+        ).send()
+        return
+
+    # ---------------------------------
+    # Invalid Input
+    # ---------------------------------
+    await cl.Message(
+        content="⚠️ I didn't understand your request. Try symbols like `BTCUSDT`, or say: `Give me the top 3 gainers`."
+    ).send()

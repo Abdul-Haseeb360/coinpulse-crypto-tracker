@@ -61,6 +61,26 @@ def get_top_gainers():
         return {"error": str(e)}
 
 
+# 🔻 Get Top 3 Losers (coins with biggest negative % change in 24h)
+def get_top_3_losers():
+    url = "https://api.binance.com/api/v3/ticker/24hr"
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=10)
+        if res.status_code != 200:
+            return None
+
+        data = res.json()
+
+        # Filter coins which actually have negative change
+        losers = [coin for coin in data if float(coin["priceChangePercent"]) < 0]
+
+        # Sort most negative → least negative
+        losers_sorted = sorted(losers, key=lambda x: float(x["priceChangePercent"]))
+
+        return losers_sorted[:3]  # top 3 losers
+    except Exception as e:
+        return {"error": str(e)}
+
 
 
 def extract_number(text):
@@ -77,10 +97,10 @@ async def on_chat_start():
     await cl.Message(
         content=(
             "💹 **Welcome to CoinPulse AI Crypto Agent!**\n\n"
-            # "You can ask:\n"
-            # "• `BTCUSDT` → Get live price\n"
-            # "• `TOP 10` → Top 10 coins\n"
-            # "• `GAINERS` → 🔥 Top 10 gaining coins\n"
+            "You can ask:\n"
+            "• `BTCUSDT` → Get live price\n"
+            "• `TOP 10` → Top 10 coins\n"
+            "• `GAINERS` → 🔥 Top 10 gaining coins\n"
         )
     ).send()
 
@@ -100,9 +120,30 @@ async def on_message(message: cl.Message):
     count = extract_number(user_text) or 10  # default = 10
 
     # ---------------------------------
+    # Natural Language: LOSERS (24h)
+    # ---------------------------------
+    if "LOSER" in user_upper or "LOSS" in user_upper or "TOP" in user_upper and "LOSS" in user_upper:
+        losers = get_top_3_losers()
+
+        if losers and isinstance(losers, list):
+            losers = losers[:count]
+
+            text = f"📉 **Top {count} Losers (24h)**\n\n"
+            for coin in losers:
+                text += (
+                    f"• **{coin['symbol']}** — "
+                    f"Change: `{coin['priceChangePercent']}%`\n"
+                )
+
+            await cl.Message(content=text).send()
+        else:
+            await cl.Message(content="❌ Failed to fetch top losers.").send()
+        return
+
+    # ---------------------------------
     # Natural Language: Gainers
     # ---------------------------------
-    if "GAINER" in user_upper or "TOP" in user_upper and "GAIN" in user_upper:
+    if "GAINER" in user_upper or ("TOP" in user_upper and "GAIN" in user_upper):
         gainers = get_top_gainers()
 
         if gainers and isinstance(gainers, list):
@@ -148,5 +189,5 @@ async def on_message(message: cl.Message):
     # Invalid Input
     # ---------------------------------
     await cl.Message(
-        content="⚠️ I didn't understand your request. Try symbols like `BTCUSDT`, or say: `Give me the top 3 gainers`."
+        content="⚠️ I didn't understand your request. Try symbols like `BTCUSDT`, or say: `Give me the top 3 losers`."
     ).send()
